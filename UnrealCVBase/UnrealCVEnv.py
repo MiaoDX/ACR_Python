@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import math
 import transforms3d
-from Utils.POSE3 import Pose3
+from Utils.POSE3 import Pose3, zyxEulDegree2Rotm
 import os
 
 class UnrealCVEnv(object):
@@ -90,31 +90,15 @@ class UnrealCVEnv(object):
 
         return image
 
-    def read_image_depth_convert(self):
 
-        image = self.read_image("depth")  # not the npy way
-        image = np.float32(image[:, :, 1])
-        print('Depth image shape:{}, dtype:{}'.format(image.shape,
-                                                      np.dtype(image[0][0])))
-
-        image *= (1000.0 / 48.5)  # to simulate Kinect format, and depth png scaled back
-        image = self._DepthConversion(image.copy(), self.camera_K[0][0])
-        image = image.astype(np.uint16)
-
-        return image
-
-    def grab_rgb_and_depth(self, use_convert=False):
+    def grab_rgb_and_depth(self):
         im_rgb = self.read_image("lit")
-        if not use_convert:
-            im_depth = self.read_image_depth()
-        else:
-            im_depth = self.read_image_depth_convert()
-
+        im_depth = self.read_image_depth()
         return im_rgb, im_depth
 
-    def get_pose_center6D(self):
-        pos = self.get_position() + self.get_rotation()
-        return np.float32(pos)
+    # def get_pose_center6D(self):
+    #     pos = self.get_position() + self.get_rotation()
+    #     return np.float32(pos)
 
     def get_pose(self):
         pose = self.get_position() + self.get_rotation()
@@ -135,22 +119,28 @@ class UnrealCVEnv(object):
 
         print("CMD:{}".format(cmd))
 
+
     @staticmethod
-    def _zyxEulDegree2zxyEulDegree(z_degree, y_degree, x_degree):
+    def _zyxEulDegreeCam2World_to_yxzEulDegreeWorld2Cam(z_degree, y_degree, x_degree):
         z_rad = math.radians(z_degree)
         y_rad = math.radians(y_degree)
         x_rad = math.radians(x_degree)
 
-        R = transforms3d.euler.euler2mat(z_rad, y_rad, x_rad, 'rzyx')
+        R = transforms3d.euler.euler2mat(z_rad, y_rad, x_rad, 'rzyx') # R_Cam2World
 
-        zxy_rad = transforms3d.euler.mat2euler(R, 'rzxy')
-        zxy_degree = list(map(math.degrees, zxy_rad))
+        R_w2c = R.T # R_World2Cam
 
-        return np.array(zxy_degree)
+        yxz_rad_w2c = transforms3d.euler.mat2euler(R_w2c, 'ryxz')
+        yxz_degree_w2c = list(map(math.degrees, yxz_rad_w2c))
+
+        return np.array(yxz_degree_w2c)
+
 
     def set_rotation(self, roll, yaw, pitch):
         """
-        the input angle sequence is zyx, but for unreal, it is yxz, besides, the angle should minus -1
+        the input angle sequence is zyx, but for unreal, it is yxz,
+        besides, the angle are Camera to world,
+        however, in the game engine, we should use world to camera to set the rotation
         :param roll:
         :param yaw:
         :param pitch:
@@ -158,12 +148,32 @@ class UnrealCVEnv(object):
         """
         self.cam['rotation'] = [float(roll), float(yaw), float(pitch)]
 
-        roll, pitch, yaw = self._zyxEulDegree2zxyEulDegree(roll, yaw, pitch)
+        # roll, pitch, yaw = self._zyxEulDegree2zxyEulDegree(roll, yaw, pitch)
+        # cmd = cmd.format(cam_id=self.cam_id, pitch=-pitch, yaw=-yaw, roll=-roll)
+
+        # yxz_degree_w2c
+        yaw_w2c, pitch_w2c, roll_w2c = self._zyxEulDegreeCam2World_to_yxzEulDegreeWorld2Cam(roll, yaw, pitch)
 
         cmd = 'vset /camera/{cam_id}/rotation {pitch:.3f} {yaw:.3f} {roll:.3f}'
-        cmd = cmd.format(cam_id=self.cam_id, pitch=-pitch, yaw=-yaw, roll=-roll)
+        cmd = cmd.format(cam_id=self.cam_id, pitch=pitch_w2c, yaw=yaw_w2c, roll=roll_w2c)
         print("CMD:{}".format(cmd))
         self.client.request(cmd)
+
+    def translate_cam(self, x, y, z):
+        x_c, y_c, z_c = self.get_position()
+        self.set_position(x_c+x, y_c+y, z_c+z)
+
+    def rotate_cam(self, roll, yaw, pitch):
+        pose = self.get_pose()
+
+        R_cam2world = pose.rotation()
+        R_w2c = R_cam2world.T
+
+        rp = zyxEulDegree2Rotm(roll, yaw, pitch)
+        R_w2c = np.dot(rp, R_w2c)
+        pose.rotation_ = R_w2c.T # cam2world
+
+        self.set_pose(pose)
 
     def set_pose_center6D(self, x, y, z, roll, yaw, pitch):
         self.set_position(x, y, z)
@@ -180,32 +190,10 @@ class UnrealCVEnv(object):
         P_CUR = self.get_pose()
         P_TAR = RP.compose(P_CUR)
 
+        # same as set_pose
         tar_pose = P_TAR.toCenter6D()
         print("Target Pose in move eye:{}".format(tar_pose))
         self.set_pose_center6D(*tar_pose)
-        return True
-
-    def move_relative_pose_hand(self, RP):
-        print("MOVE relative pose with hand in ACRBaseUnreal")
-
-        X_6D = [10, 10, 10, 8.0416, 9.2526, 8.0416]
-        XH2E = Pose3.from6D(X_6D)
-
-        Eye = self.get_pose()
-
-        Hand = XH2E.inverse().compose(Eye)
-        Hand2 = RP.compose(Hand)
-        Eye2 = XH2E.compose(Hand2)
-
-        relative_pose3_for_eye = XH2E.compose(RP).compose(XH2E.inverse())
-        Eye2_ = relative_pose3_for_eye.compose(Eye)
-
-        assert np.allclose(Eye2.rotation(), Eye2_.rotation())
-        assert np.allclose(Eye2.center(), Eye2_.center())
-
-        tar_pose_move_hand = Eye2.toCenter6D()
-
-        self.set_pose_center6D(*tar_pose_move_hand)
         return True
 
 
@@ -219,21 +207,28 @@ def _read_npy(res):
 
 
 if __name__ == "__main__":
-    initPose = Pose3().from6D(np.array([-500, 500, -1000, 0, 0, 0]))  # sofa
+    #initPose = Pose3().from6D(np.array([-500, 500, -1000, 0, 0, 0]))  # sofa
+    initPose = Pose3().fromCenter6D(np.array([0, -1000, -1000, 0, 0, 0]))  # sofa
 
-    ins = UnrealCVEnv(init_pose=initPose.toCenter6D())
+    #ins = UnrealCVEnv(init_pose=initPose.toCenter6D())
+    ins = UnrealCVEnv(init_pose=initPose)
     ins.connect()
     img_rgb, img_depth = ins.grab_rgb_and_depth()
-    cv2.imwrite("RGB_before.png", img_rgb)
-    cv2.imwrite("depth_before.png", img_depth)
-    #
-    # cv2.imshow("RGB_before", img_rgb)
-    # cv2.imshow("depth_before", img_depth)
+    # cv2.imwrite("RGB_before.png", img_rgb)
+    # cv2.imwrite("depth_before.png", img_depth)
 
-    ins.move_relative_pose_eye(Pose3.fromCenter6D([10, 10, 10, 0.3, 0.2, 0.1]))
+
+    rp_6d = [100, 0, 0, 90, 0, 0]
+    ins.move_relative_pose_eye(Pose3.fromCenter6D(rp_6d))
+
+    """
+    move_6d = [100, 0, 0, 90, 0, 0]
+    ins.translate_cam(*move_6d[:3])
+    ins.rotate_cam(*move_6d[3:])
+    pose = ins.get_pose()
+    pose.debug()
+    """
+
     img_rgb, img_depth = ins.grab_rgb_and_depth()
-    cv2.imwrite("RGB_after.png", img_rgb)
-    cv2.imwrite("depth_after.png", img_depth)
-
-    # cv2.imshow("RGB_after", img_rgb)
-    # cv2.imshow("depth_after", img_depth)
+    # cv2.imwrite("RGB_after.png", img_rgb)
+    # cv2.imwrite("depth_after.png", img_depth)
