@@ -17,18 +17,14 @@ class PlatformUnrealCV(PlatformBase):
         self.unrealCvEnv.disconnect()
         return not self.unrealCvEnv.isConnected()
 
-    def rotate(self, pitch, yaw, roll) -> bool:
-        self.unrealCvEnv.set_rotation(pitch=pitch, yaw=yaw, roll=roll)
-        return True
+    # def rotate(self, roll, yaw, pitch) -> bool:
+    #     self.unrealCvEnv.rotate_cam(roll=roll, yaw=yaw, pitch=pitch)
+    #     return True
+    #
+    # def translate(self, x, y, z)->bool:
+    #     self.unrealCvEnv.translate_cam(x=x, y=y, z=z)
+    #     return True
 
-    def translate(self, x, y, z)->bool:
-        self.unrealCvEnv.set_position(x=x, y=y, z=z)
-        return True
-
-    def move(self, pitch, yaw, roll, tx, ty, tz) -> bool:
-        rs = self.rotate(pitch, yaw, roll)
-        ts = self.translate(tx, ty, tz)
-        return rs and ts
 
     # Recommend to use for all relative motions
     # AX = XB, thus A = X B X^-1

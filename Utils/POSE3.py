@@ -2,6 +2,8 @@
 The [pose3 class](https://github.com/openMVG/openMVG/blob/master/src/openMVG/geometry/pose3.hpp)
 
 [Rotation registration with android phone euler angles](https://github.com/openMVG/openMVG/issues/551)
+
+[](https://openmvg.readthedocs.io/en/latest/openMVG/cameras/cameras/): R:the rotation of the camera to the world frame
 """
 
 import numpy as np
@@ -187,3 +189,25 @@ def rotm2zyxEulDegree(R):
     zyx_rad = transforms3d.euler.mat2euler(R, 'rzyx')
     zyx_degree = list(map(math.degrees, zyx_rad))
     return np.array(zyx_degree)
+
+
+if __name__ == '__main__':
+
+    # p_w = [0, 0, 0]
+    # p_w = [-1, -1, -1]
+    p_w = [1, 1, 1]
+
+    x_y_z = [2, 0, 0]
+    #z_y_x_degree = [-90, -90, -90]
+    # z_y_x_degree = [-90, 90, 0]
+    z_y_x_degree = [20, 20, 20]
+    P = Pose3().fromCenter6D(x_y_z+z_y_x_degree)
+    P.debug()
+    # p_c = P.apply_point(p_w)
+    # print(p_c)
+
+    p0 = Pose3().fromCenter6D([0, 0, 0, 0.02, 0, 0])
+
+    p2 = P.compose(p0).compose(P.inverse())
+
+    p2.debug()

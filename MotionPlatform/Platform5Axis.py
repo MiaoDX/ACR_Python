@@ -7,14 +7,6 @@ from MotionPlatform import PlatformBase as platform
 import requests
 from Utils.POSE3 import Pose3
 
-# def generate_cmd_and_parse_response_json(url = 'http://127.0.0.1:5000/', cmd='/'):
-#     if cmd[0] == '/':
-#         cmd = cmd[1:]
-#     r = requests.get(url + cmd)
-#     assert r.status_code == 200
-#     assert r.headers['content-type'] == "application/json"
-#     print(r.json())
-#     return r.json()
 
 
 def generate_cmd_and_parse_response_text(url = 'http://127.0.0.1:5000/', cmd='/'):
@@ -48,7 +40,7 @@ class Platform5Axis(platform.PlatformBase):
     def close(self):
         return True
 
-    def rotate(self, pitch, yaw, roll):
+    def rotate(self, roll, yaw, pitch):
         if np.allclose([pitch, yaw, roll], np.zeros(3)): # won't more too small
             return True
 
@@ -68,7 +60,8 @@ class Platform5Axis(platform.PlatformBase):
         motion = movingPose.toCenter6D()
         rots = np.array(motion[3:])  # sequence: rz, ry, rx
         trans = np.array(motion[:3]) * -1  # sequence: tx, ty, tz
-        rs = self.rotate(rots[2], rots[1], rots[0])
+        #rs = self.rotate(rots[2], rots[1], rots[0])
+        rs = self.rotate(rots[0], rots[1], rots[2])
         ts = self.translate(trans[0], trans[1], trans[2])
         return rs and ts
 
@@ -92,7 +85,7 @@ class Platform5Axis(platform.PlatformBase):
 if __name__ == "__main__":
     platform5Axis = Platform5Axis(url='http://127.0.0.1:10241/')
 
-    rotation = np.array([2, 10, -5.2]) * -1
+    rotation = np.array([2, 10, -5.2])
 
     platform5Axis.rotate(*rotation)
 

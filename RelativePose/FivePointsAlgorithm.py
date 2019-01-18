@@ -9,7 +9,7 @@ class FivePointsAlgorithmBase(object):
     def __init__(self) -> None:
         pass
 
-    def getPose(self, refImg : np.ndarray, curImg: np.ndarray, K: np.ndarray) -> (Pose3, np.ndarray, np.ndarray):
+    def getPoseRef2Cur(self, refImg : np.ndarray, curImg: np.ndarray, K: np.ndarray) -> (Pose3, np.ndarray, np.ndarray):
         pass
 
 
@@ -32,7 +32,7 @@ class FivePointsAlgorithm_Nghia(FivePointsAlgorithmBase):
         import RelativePose5Point
         self._fivePointsAlg = RelativePose5Point.RelativePose5Point()
 
-    def getPose(self, refImg: np.ndarray, curImg: np.ndarray, K: np.ndarray) -> (Pose3, np.ndarray, np.ndarray):
+    def getPoseRef2Cur(self, refImg: np.ndarray, curImg: np.ndarray, K: np.ndarray) -> (Pose3, np.ndarray, np.ndarray):
         ref_pts, cur_pts = SIFTFeature.detectAndMatch(image1=refImg, image2=curImg)  # type: np.ndarray, np.ndarray
 
         ref_pts_list = list(ref_pts.flatten())
@@ -42,12 +42,13 @@ class FivePointsAlgorithm_Nghia(FivePointsAlgorithmBase):
         print(ref_pts[:5])
         print(ref_pts_list[:10])
 
+        # Pose_B = RP_A2B * Pose_A
         R, t = self._fivePointsAlg.calcRP(ref_pts_list, cur_pts_list, K_list)
         R = np.array(R).reshape(3, 3)
         t = np.array(t)
 
-        pose_ref_to_cur = Pose3.fromRt(R, t)
-        return pose_ref_to_cur, ref_pts, cur_pts
+        pose_ref2cur = Pose3.fromRt(R, t)
+        return pose_ref2cur, ref_pts, cur_pts
 
 
 def testFivePoints_CV():

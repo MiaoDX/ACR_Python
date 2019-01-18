@@ -121,18 +121,19 @@ class ACRBisection(object):
     def relocation(self):
         while True:
             image, image_depth = self.camera.getImage()
-            pose, match_points_ref, match_points_cur = \
-                self.relativePoseAlgorithm.getPose(self.refImage, image, self.camera.cameraCalibration.getK())
+            pose_ref2cur, match_points_ref, match_points_cur = \
+                self.relativePoseAlgorithm.getPoseRef2Cur(self.refImage, image, self.camera.cameraCalibration.getK())
 
-            self.curPose = pose.copy()
+            self.curPose = pose_ref2cur.copy()
             self.curAFD = self.computeAFD(match_points_ref, match_points_cur)
             self.curImage = image
 
             # Bisection
-            t, axis, angle = pose.to_t_aixsAngle()
+            t, axis, angle = pose_ref2cur.to_t_aixsAngle()
             lastT, lastAxis, lastAngle = self.lastPose.to_t_aixsAngle()
             if np.dot(t, lastT) < -1e-6:
                 self.cur_S /= 2.0
+
 
             if np.dot(axis, lastAxis) < -1e-6:
                 self.cur_angle_bound /= 2.0
@@ -143,7 +144,7 @@ class ACRBisection(object):
                 break
 
             # moving platform
-            eye_pose_guess = self.poseWithScale(pose, self.cur_S)
+            eye_pose_guess = self.poseWithScale(pose_ref2cur, self.cur_S)
             # dumpMotion = self.dumpPose(eye_pose_guess.inverse())
             motion = eye_pose_guess.inverse()
             motion_bounded = self.boundAngle(motion)
@@ -164,7 +165,8 @@ def test():
     from MotionPlatform.PlatformUnrealCV import PlatformUnrealCV
     from UnrealCVBase.UnrealCVEnv import UnrealCVEnv
 
-    initPose = Pose3().from6D(np.array([-500, 500, -1000, 0, 0, 0]))  # sofa
+    # initPose = Pose3().from6D(np.array([-500, 500, -1000, 0, 0, 0]))  # sofa
+    initPose = Pose3().fromCenter6D(np.array([0, -1000, -1000, 0, 0, 0]))  # sofa
 
     #X = Pose3.fromCenter6D([0, 0, 0, 1, 2, 3])
     X = Pose3.fromCenter6D([0, 0, 0, 0, 0, 0])
@@ -174,19 +176,20 @@ def test():
     myACR = ACRBisection(camera=camera, platform=platform)
     myACR.openAll()
 
-    ref_image, ref_image_depth = myACR.camera.getImage()
-
-    pose = Pose3.fromCenter6D([10, 0, 8, 1.2, 0, -1.3])
-    platform.movePose(movingPose=pose)
-
-    directory = "D:/temp/acr"
+    directory = "H:/projects/graduation_project_codebase/ACR_Python/ACR_RUN/Bisection/acr_test"
     if not os.path.exists(directory):
-        os.mkdir(directory)
+        os.makedirs(directory)
 
+    ref_image, ref_image_depth = myACR.camera.getImage()
     img_path = os.path.join(directory, "rgb_ref.png")
     img_depth_path = os.path.join(directory, "depth_ref.png")
     cv2.imwrite(img_path, ref_image)
     cv2.imwrite(img_depth_path, ref_image_depth)
+
+
+    # pose = Pose3.fromCenter6D([10, 0, 8, 1.2, 0, -1.3])
+    pose = Pose3.fromCenter6D([100, -50, 150, 5, -15, -10])
+    platform.movePose(movingPose=pose)
 
     myACR.initSettings(data_dir=directory, refImage=ref_image)
     # input('Press to continue...')
@@ -225,5 +228,5 @@ def test2():
 
 
 if __name__ == "__main__":
-    test2()
+    test()
 

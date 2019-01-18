@@ -15,17 +15,12 @@ class PlatformBase(object):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def rotate(self, pitch, yaw, roll) -> bool:
+    def rotate(self, roll, yaw, pitch) -> bool:
         raise NotImplementedError
 
     @abc.abstractmethod
     def translate(self, x, y, z)->bool:
         raise NotImplementedError
-
-    def move(self, pitch, yaw, roll, tx, ty, tz) -> bool:
-        rs = self.rotate(pitch, yaw, roll)
-        ts = self.translate(tx, ty, tz)
-        return rs and ts
 
     @abc.abstractmethod
     def movePose(self, movingPose: Pose3):
